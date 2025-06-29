@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Focus Tracker",
+  "version": "1.0",
+  "description": "Tracks productive vs distracting sites and shows your focus score.",
+  "permissions": ["tabs", "storage"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icons/icon.png"
+  },
+  "icons": {
+    "48": "icons/icon.png"
+  }
+}
