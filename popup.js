@@ -33,6 +33,8 @@ if (notepadBtn) {
       target: { tabId: tab.id },
       files: ['notepad_content_listener.js']
     });
+    // Close the popup window
+    window.close();
   });
 }
 

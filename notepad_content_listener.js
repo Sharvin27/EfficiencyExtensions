@@ -1,7 +1,17 @@
-// Content script to listen for notepad send event and relay to background
+if (!window._leetNotepadListenerAdded) {
 window.addEventListener('leet-notepad-send', function(e) {
-  chrome.runtime.sendMessage({
-    type: 'notepad-intuition',
-    intuition: e.detail
-  });
-});
+  if (chrome.runtime?.sendMessage) {
+    chrome.runtime.sendMessage(
+      {
+        type: 'notepad-intuition',
+        intuition: e.detail
+      },
+      () => {
+        const err = chrome.runtime.lastError;
+      
+      }
+    );
+  }
+})
+window._leetNotepadListenerAdded = true;
+};

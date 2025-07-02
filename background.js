@@ -48,33 +48,28 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
 
 
-
 // Listen for messages from content script and send to Notion
 chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   if (message.type === 'notepad-intuition') {
-    const intuitionText = message.intuition;
+    const intuitionText = message.intuition.text;
+    const isSolved = message.intuition.solved;
     console.log("▶️ Grabbing active tab...");
 
     // Get the current tab
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
     if (!tab || !tab.id || !tab.url || !tab.title) {
-      alert("Could not fetch tab info.");
+      console.warn("Could not fetch tab info.");
       return;
     }
-
     const leetcodeUrl = tab.url;
     const leetcodeTitle = tab.title.replace(" - LeetCode", "").trim();
 
-    // Inject script to get difficulty and tags from the page
+    // Get difficulty and tags from the page
     const [{ result }] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
-        // Get difficulty from div with class containing 'text-difficulty-'
         const diffElem = document.querySelector('div[class*="text-difficulty-"]');
         const difficulty = diffElem ? diffElem.innerText.trim() : "Unknown";
-
-        // Get tags from a tags inside the topics container
         const tagContainer = document.querySelector('div.flex.flex-wrap.gap-1.pl-7');
         let tags = [];
         if (tagContainer) {
@@ -83,18 +78,11 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         return { difficulty, tags };
       }
     });
-
     const { difficulty, tags } = result;
-
-    console.log("🔗 URL:", leetcodeUrl);
-    console.log("📄 Title:", leetcodeTitle);
-    console.log("💪 Difficulty:", difficulty);
-    console.log("🏷️ Tags:", tags);
-
-    // Prepare tags for Notion multi_select
     const notionTags = tags.map(tag => ({ name: tag }));
 
-    const response = await fetch("https://api.notion.com/v1/pages", {
+    // STEP 1: Search for existing page with the same title
+    const searchRes = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${NOTION_TOKEN}`,
@@ -102,58 +90,126 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         "Notion-Version": "2022-06-28"
       },
       body: JSON.stringify({
-        parent: {
-          database_id: DATABASE_ID
-        },
-        properties: {
-          "Problem Title": {
-            "title": [
-              {
-                "text": {
-                  "content": leetcodeTitle
-                }
-              }
-            ]
-          },
-          "Link": {
-            "url": leetcodeUrl
-          },
-          "Status": {
-            "select": {
-              "name": "Unsolved"
-            }
-          },
-          "Intuition": {
-            "rich_text": [
-              {
-                "text": {
-                  "content": intuitionText
-                }
-              }
-            ]
-          },
-          "Tags": {
-            "multi_select": notionTags
-          },
-          "Difficulty": {
-            "select": {
-              "name": difficulty
-            }
-          },
-          "TimeStamp" : {
-            "date": {
-              "start": new Date().toISOString()
-            }
+        filter: {
+          property: "Problem Title",
+          title: {
+            equals: leetcodeTitle
           }
         }
       })
     });
-
-    if (response.ok) {
-      console.log("✅ Success:", await response.json());
+    const searchData = await searchRes.json();
+    if (searchData.results && searchData.results.length > 0) {
+      // Page exists, update properties and append intuition block
+      const pageId = searchData.results[0].id;
+      // Update properties
+      await fetch(`https://api.notion.com/v1/pages/${pageId}`, {
+        method: "PATCH",
+        headers: {
+          "Authorization": `Bearer ${NOTION_TOKEN}`,
+          "Content-Type": "application/json",
+          "Notion-Version": "2022-06-28"
+        },
+        body: JSON.stringify({
+          properties: {
+            "Status": { "select": { "name": isSolved ? "Solved" : "Unsolved" } },
+            
+            "TimeStamp": { "date": { "start": new Date().toISOString() } }
+          }
+        })
+      });
+      // Append intuition block
+      await fetch(`https://api.notion.com/v1/blocks/${pageId}/children`, {
+        method: "PATCH",
+        headers: {
+          "Authorization": `Bearer ${NOTION_TOKEN}`,
+          "Content-Type": "application/json",
+          "Notion-Version": "2022-06-28"
+        },
+        body: JSON.stringify({
+          children: [
+            {
+              object: 'block',
+              type: 'paragraph',
+              paragraph: {
+                rich_text: [
+                  {
+                    type: 'text',
+                    text: { content: intuitionText }
+                  }
+                ]
+              }
+            }
+          ]
+        })
+      });
+      console.log("✅ Existing page updated and intuition block appended.");
     } else {
-      const err = await response.text();
-      console.error("❌ Error:", response.status, err);
+      // Page does not exist, create as before
+      const pageRes = await fetch("https://api.notion.com/v1/pages", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${NOTION_TOKEN}`,
+          "Content-Type": "application/json",
+          "Notion-Version": "2022-06-28"
+        },
+        body: JSON.stringify({
+          parent: { database_id: DATABASE_ID },
+          properties: {
+            "Problem Title": {
+              "title": [
+                { "text": { "content": leetcodeTitle } }
+              ]
+            },
+            "Link": { "url": leetcodeUrl },
+            "Status": {
+              "select": { "name": isSolved ? "Solved" : "Unsolved" }
+            },
+            "Tags": {
+              "multi_select": notionTags
+            },
+            "Difficulty": {
+              "select": { "name": difficulty }
+            },
+            "TimeStamp": {
+              "date": { "start": new Date().toISOString() }
+            }
+          }
+        })
+      });
+      if (!pageRes.ok) {
+        const err = await pageRes.text();
+        console.error("❌ Error creating page:", pageRes.status, err);
+        return;
+      }
+      const createdPage = await pageRes.json();
+      const pageId = createdPage.id;
+      // Append Intuition block
+      await fetch(`https://api.notion.com/v1/blocks/${pageId}/children`, {
+        method: "PATCH",
+        headers: {
+          "Authorization": `Bearer ${NOTION_TOKEN}`,
+          "Content-Type": "application/json",
+          "Notion-Version": "2022-06-28"
+        },
+        body: JSON.stringify({
+          children: [
+            {
+              object: 'block',
+              type: 'paragraph',
+              paragraph: {
+                rich_text: [
+                  {
+                    type: 'text',
+                    text: { content: intuitionText }
+                  }
+                ]
+              }
+            }
+          ]
+        })
+      });
+      console.log("✅ Page created and intuition block appended successfully.");
     }
   }
 });
