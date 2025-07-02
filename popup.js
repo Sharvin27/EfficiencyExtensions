@@ -23,16 +23,41 @@ document.getElementById("send").addEventListener("click", async () => {
   // Get the current tab
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-  if (!tab || !tab.url || !tab.title) {
-    alert("❌ Could not fetch tab info.");
+  if (!tab || !tab.id || !tab.url || !tab.title) {
+    alert("Could not fetch tab info.");
     return;
   }
 
   const leetcodeUrl = tab.url;
   const leetcodeTitle = tab.title.replace(" - LeetCode", "").trim();
 
+  // Inject script to get difficulty and tags from the page
+  const [{ result }] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: () => {
+      // Get difficulty from div with class containing 'text-difficulty-'
+      const diffElem = document.querySelector('div[class*="text-difficulty-"]');
+      const difficulty = diffElem ? diffElem.innerText.trim() : "Unknown";
+
+      // Get tags from a tags inside the topics container
+      const tagContainer = document.querySelector('div.flex.flex-wrap.gap-1.pl-7');
+      let tags = [];
+      if (tagContainer) {
+        tags = Array.from(tagContainer.querySelectorAll('a')).map(el => el.innerText.trim());
+      }
+      return { difficulty, tags };
+    }
+  });
+
+  const { difficulty, tags } = result;
+
   console.log("🔗 URL:", leetcodeUrl);
   console.log("📄 Title:", leetcodeTitle);
+  console.log("💪 Difficulty:", difficulty);
+  console.log("🏷️ Tags:", tags);
+
+  // Prepare tags for Notion multi_select
+  const notionTags = tags.map(tag => ({ name: tag }));
 
   const response = await fetch("https://api.notion.com/v1/pages", {
     method: "POST",
@@ -73,11 +98,16 @@ document.getElementById("send").addEventListener("click", async () => {
           ]
         },
         "Tags": {
-          "multi_select": []
+          "multi_select": notionTags
         },
         "Difficulty": {
           "select": {
-            "name": "Medium"
+            "name": difficulty
+          }
+        },
+        "TimeStamp" : {
+          "date": {
+            "start": new Date().toISOString()
           }
         }
       }
