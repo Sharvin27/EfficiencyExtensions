@@ -3,13 +3,13 @@
   "name": "Focus Tracker",
   "version": "1.0",
   "description": "Tracks productive vs distracting sites and shows your focus score.",
-  "permissions": ["tabs", "storage", "scripting","activeTab"],
+  "permissions": ["tabs", "storage", "scripting", "activeTab"],
   "background": {
-    "service_worker": "background.js",
+    "service_worker": "src/background.js",
     "type": "module"
   },
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "src/popup/popup.html",
     "default_icon": "icons/icon.png"
   },
   "host_permissions": [
