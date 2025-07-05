@@ -1,4 +1,4 @@
-import { GEMINI_API_KEY } from "./secrets.js";
+import { GEMINI_API_KEY } from "../secrets.js";
 
 const API_KEY = GEMINI_API_KEY; // Your actual Gemini key
 

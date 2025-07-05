@@ -26,12 +26,12 @@ if (notepadBtn) {
     // Inject the notepad overlay
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      files: ['notepad_inject.js']
+      files: ['src/notepad/notepad_inject.js']
     });
     // Inject the content listener (only once per page, but safe to call again)
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      files: ['notepad_content_listener.js']
+      files: ['src/notepad/notepad_content_listener.js']
     });
     // Close the popup window
     window.close();
