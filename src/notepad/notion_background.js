@@ -5,6 +5,7 @@ export async function handleNotepadMessage(message, sender, sendResponse) {
 
   const intuitionText = message.intuition.text;
   const isSolved = message.intuition.solved;
+  const pointer = message.intuition.pointer || "";
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab || !tab.id || !tab.url || !tab.title) {
@@ -65,6 +66,7 @@ export async function handleNotepadMessage(message, sender, sendResponse) {
       body: JSON.stringify({
         properties: {
           "Status": { "select": { "name": isSolved ? "Solved" : "Unsolved" } },
+          "Pointers": { "rich_text": [{ "text": { "content": pointer } }] },
           "TimeStamp": { "date": { "start": new Date().toISOString() } }
         }
       })
@@ -87,6 +89,7 @@ export async function handleNotepadMessage(message, sender, sendResponse) {
           "Problem Title": { "title": [{ "text": { "content": leetcodeTitle } }] },
           "Link": { "url": leetcodeUrl },
           "Status": { "select": { "name": isSolved ? "Solved" : "Unsolved" } },
+          "Pointers": { "rich_text": [{ "text": { "content": pointer } }] },
           "Tags": { "multi_select": notionTags },
           "Difficulty": { "select": { "name": difficulty } },
           "TimeStamp": { "date": { "start": new Date().toISOString() } }

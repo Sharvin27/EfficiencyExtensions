@@ -32,6 +32,31 @@
   title.style.fontSize = '24px';
   title.style.fontWeight = '600';
   title.style.textShadow = '0 0 10px #00f5ff88';
+
+  // Final Pointer Toggle Button (small button next to title)
+  const pointerToggleBtn = document.createElement('button');
+  pointerToggleBtn.textContent = '+ Pointer';
+  pointerToggleBtn.style.marginLeft = '12px';
+  pointerToggleBtn.style.padding = '4px 10px';
+  pointerToggleBtn.style.border = '1px solid #00f5ff77';
+  pointerToggleBtn.style.borderRadius = '6px';
+  pointerToggleBtn.style.background = 'transparent';
+  pointerToggleBtn.style.color = '#00f5ff';
+  pointerToggleBtn.style.fontSize = '13px';
+  pointerToggleBtn.style.cursor = 'pointer';
+  pointerToggleBtn.style.height = '28px';
+  pointerToggleBtn.style.boxShadow = '0 0 6px #00f5ff44 inset, 0 0 6px #00f5ff44';
+  pointerToggleBtn.style.transition = 'all 0.2s ease';
+  pointerToggleBtn.onmouseover = () => {
+    pointerToggleBtn.style.background = 'rgba(0, 245, 255, 0.08)';
+  };
+  pointerToggleBtn.onmouseout = () => {
+    pointerToggleBtn.style.background = 'transparent';
+  };
+
+
+  title.appendChild(pointerToggleBtn);  // 👈 Add button to the title
+
   header.appendChild(title);
 
   const closeBtn = document.createElement('button');
@@ -52,6 +77,30 @@
 
   overlay.appendChild(header);
 
+  // Final Pointer Input (hidden initially)
+  const pointerInput = document.createElement('input');
+  pointerInput.type = 'text';
+  pointerInput.placeholder = 'Write final pointer...';
+  pointerInput.style.margin = '4px 0 12px 0';
+  pointerInput.style.padding = '10px 14px';
+  pointerInput.style.border = '1px solid #00f5ff33';
+  pointerInput.style.borderRadius = '8px';
+  pointerInput.style.background = 'rgba(255,255,255,0.04)';
+  pointerInput.style.color = '#fff';
+  pointerInput.style.fontSize = '14px';
+  pointerInput.style.outline = 'none';
+  pointerInput.style.display = 'none';  // Hidden initially
+  pointerInput.style.width = '100%';
+
+  overlay.appendChild(pointerInput);
+
+  let pointerVisible = false;
+  pointerToggleBtn.onclick = () => {
+    pointerVisible = !pointerVisible;
+    pointerInput.style.display = pointerVisible ? 'block' : 'none';
+  };
+
+
   // 📝 Rich Text Editor with fixed template text
   const editor = document.createElement('div');
   editor.id = 'leet-intuition-editor';
@@ -67,15 +116,20 @@
   editor.style.overflowY = 'auto';
   editor.style.outline = 'none';
   editor.style.fontFamily = 'Consolas, Monaco, monospace';
-//   editor.innerHTML = `
-//     <div style="color:#ccc;font-size:120%;font-weight:bold;margin-bottom:24px;pointer-events:none;user-select:none;">Intuition:</div>
-//     <div><br></div>
-//     <div style="color:#ccc;font-size:120%;font-weight:bold;margin-bottom:24px;pointer-events:none;user-select:none;">Your Code:</div>
-//     <div><br></div>
-//     <div style="color:#ccc;font-size:120%;font-weight:bold;margin-bottom:24px;pointer-events:none;user-select:none;">Time & Space Complexity</div>
-//     <div style="pointer-events:none;user-select:none;">- Time: <br>- Space:</div>
-//   `;
+
   overlay.appendChild(editor);
+
+  // --- Notepad persistence logic ---
+  // Key for localStorage (unique per problem page)
+  const storageKey = 'leet-notepad-' + location.pathname;
+  // Load saved content
+  const saved = localStorage.getItem(storageKey);
+  if (saved) editor.innerText = saved;
+  // Save on every change
+  editor.addEventListener('input', () => {
+    localStorage.setItem(storageKey, editor.innerText);
+  });
+  // --- End persistence logic ---
 
   // Status checkbox and label
   const statusRow = document.createElement('div');
@@ -116,14 +170,19 @@
   sendBtn.style.width = '100%';
   sendBtn.style.fontSize = '14px';
   sendBtn.style.boxShadow = '0 4px 15px #00f5ff55';
+  
 
   sendBtn.onclick = () => {
-    const rawHtml = editor.innerHTML;
     const plainText = editor.innerText.trim();
     const isSolved = statusCheckbox.checked;
+    const finalPointer = pointerInput.value?.trim() || "";  // Always fallback to empty string
+
+
     window.dispatchEvent(new CustomEvent('leet-notepad-send', {
-      detail: { text: plainText, solved: isSolved }
+      detail: { text: plainText, pointer: finalPointer, solved: isSolved }
     }));
+    // Clear saved content after sending (optional)
+    localStorage.removeItem(storageKey);
     overlay.remove();
   };
 

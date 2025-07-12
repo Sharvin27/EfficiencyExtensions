@@ -1,9 +1,9 @@
-import { GEMINI_API_KEY } from "../secrets.js";
+import { GEMINI_API_KEY, HUGGING_FACE_API_KEY } from "../secrets.js";
 
 const API_KEY = GEMINI_API_KEY; // Your actual Gemini key
 
 export async function callGemini(domain,title) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
 
   const instruction = `
     You are an assistant that classifies websites as either "distracting" or "not distracting". Use your judgment to decide if the site is likely to distract someone.

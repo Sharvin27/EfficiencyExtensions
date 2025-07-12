@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeetCode Tracker</title>
+    <link rel="stylesheet" href="notepad.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">LeetCode Tracker</h1>
+            <div class="controls">
+                <button class="btn btn-secondary" id="newBtn">+ New</button>
+                <button class="btn btn-secondary" id="shareBtn">Share</button>
+            </div>
+        </div>
+
+        <div class="add-form hidden" id="addForm">
+            <div class="form-group">
+                <label class="form-label">Problem Title</label>
+                <input type="text" class="form-input" id="problemTitle" placeholder="Enter problem title">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Link</label>
+                <input type="url" class="form-input" id="problemLink" placeholder="https://leetcode.com/problems/...">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Status</label>
+                <select class="form-input" id="problemStatus">
+                    <option value="To Do">To Do</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Solved">Solved</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Difficulty</label>
+                <select class="form-input" id="problemDifficulty">
+                    <option value="Easy">Easy</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Hard">Hard</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Tags (comma-separated)</label>
+                <input type="text" class="form-input" id="problemTags" placeholder="Array, Hash Table, String">
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" id="addProblemBtn">Add Problem</button>
+                <button class="btn btn-secondary" id="cancelBtn">Cancel</button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <div class="table-header">
+                <div class="table-icon">📊</div>
+                <div class="table-title">Table</div>
+            </div>
+            <table id="problemsTable">
+                <thead>
+                    <tr>
+                        <th>Problem Title</th>
+                        <th>Link</th>
+                        <th>Status</th>
+                        <th>Pointers</th>
+                        <th>Tags</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="problemsTableBody">
+                    <!-- Dynamic content will be inserted here -->
+                </tbody>
+            </table>
+            <div class="new-page-btn" id="newPageBtn">
+                <span class="plus-icon">+</span>
+                <span>New page</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay" id="overlay" onclick="closeDetailsPanel()"></div>
+
+    <div class="details-panel" id="detailsPanel">
+        <div class="details-header">
+            <h2 class="details-title" id="detailsTitle">Problem Details</h2>
+            <button class="close-btn" onclick="closeDetailsPanel()">×</button>
+        </div>
+        <div class="details-content">
+            <div class="property-row">
+                <span class="property-label">Difficulty</span>
+                <span class="property-value" id="detailsDifficulty">-</span>
+            </div>
+            <div class="property-row">
+                <span class="property-label">Link</span>
+                <a class="property-value link" id="detailsLink" href="#" target="_blank">-</a>
+            </div>
+            <div class="property-row">
+                <span class="property-label">Status</span>
+                <span class="property-value" id="detailsStatus">-</span>
+            </div>
+            <div class="property-row">
+                <span class="property-label">Tags</span>
+                <div class="property-value" id="detailsTags">-</div>
+            </div>
+            <div class="property-row">
+                <span class="property-label">TimeStamp</span>
+                <span class="property-value" id="detailsTimestamp">-</span>
+            </div>
+
+            <div class="comments-section">
+                <h3 class="comments-title">Comments</h3>
+                <textarea class="comment-input" id="commentsInput" placeholder="Add a comment..." rows="3"></textarea>
+            </div>
+
+            <div class="intuition-section">
+                <h3 class="intuition-title">Intuition:</h3>
+                <div class="intuition-content" id="intuitionContent">
+                    <textarea id="intuitionInput" style="width: 100%; border: none; background: transparent; resize: none; font-family: inherit;" rows="3" placeholder="Add your intuition..."></textarea>
+                </div>
+            </div>
+
+            <div class="code-section">
+                <h3 class="code-title">Code 1: --> Accepted First Try</h3>
+                <div class="code-content" id="codeContent">
+                    <textarea id="codeInput" style="width: 100%; border: none; background: transparent; color: inherit; font-family: inherit; resize: none;" rows="8" placeholder="class Solution:
+    def solve(self):
+        # Your code here
+        pass"></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="notepad.js"></script>
+</body>
+</html>
