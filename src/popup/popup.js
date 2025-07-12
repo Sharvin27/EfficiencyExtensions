@@ -38,4 +38,8 @@ if (notepadBtn) {
   });
 }
 
+document.getElementById('leetcodeTableBtn').addEventListener('click', () => {
+  const url = chrome.runtime.getURL('src/notepad/innerTable/notepad.html'); // update path as needed
+  chrome.tabs.create({ url });
+});
 
