@@ -64,6 +64,8 @@
             <th>Status</th>
             <th>Pointers</th>
             <th>Tags</th>
+            <th>Difficulty</th>
+            <th>Timestamp</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -109,21 +111,29 @@
 
       <div class="comments-section">
         <h3 class="comments-title">Comments</h3>
-        <textarea class="comment-input" id="commentsInput" rows="3" placeholder="Add a comment..." style="overflow:hidden;"></textarea>
+        <textarea class="comment-input" id="commentsInput" rows="2" placeholder="Add a comment..." style="overflow:hidden;"></textarea>
       </div>
 
       <div class="intuition-section">
         <h3 class="intuition-title">Intuition:</h3>
-        <textarea id="intuitionInput" rows="3" placeholder="Add your intuition..." style="width: 100%; border: none; background: transparent; resize: none; font-family: inherit; overflow: hidden;"></textarea>
-      </div>
+        <div
+            id="intuitionInput"
+            contenteditable="true"
+            placeholder="Add your intuition..."
+            style="
+            width: 100%;
+            min-height: 3em;
+            background: transparent;
+            border: none;
+            outline: none;
+            font-family: inherit;
+            white-space: pre-wrap;
+            word-break: break-word;
+            "
+        ></div>
+        </div>
 
-      <div class="code-section">
-        <h3 class="code-title">Code 1: → Accepted First Try</h3>
-        <textarea id="codeInput" rows="8" placeholder="class Solution:
-    def solve(self):
-        # Your code here
-        pass" style="width: 100%; border: none; background: transparent; color: inherit; font-family: inherit; resize: none; overflow: hidden;"></textarea>
-      </div>
+
     </div>
   </div>
 

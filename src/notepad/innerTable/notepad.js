@@ -29,9 +29,10 @@ function renderTable() {
             <td><span class="status-badge ${problem.status.toLowerCase().replace(' ', '-')}">${problem.status}</span></td>
             <td>${problem.pointers}</td>
             <td>${problem.tags.map(tag => `<span class="tag tag-${tag.toLowerCase().replace(' ', '-')}">${tag}</span>`).join('')}</td>
+            <td>${problem.difficulty}</td>
+            <td>${problem.timestamp}</td>
             <td>
                 <div class="row-actions">
-                    <button class="action-btn open-btn" data-id="${problem.id}">Open</button>
                     <button class="action-btn delete-btn" data-id="${problem.id}">Delete</button>
                 </div>
             </td>
@@ -45,6 +46,13 @@ function openDetailsPanel(problemId) {
     const p = problems.find(pr => pr.id === problemId);
     if (!p) return;
 
+    // Format intuition with "Code:" bolded if present
+    let formattedIntuition = p.intuition || "";
+    if (formattedIntuition.includes("Code")) {
+    formattedIntuition = formattedIntuition.replace(/(Code[^:]*:)/g, "<strong>$1</strong>");
+    }
+
+
     document.getElementById('detailsTitle').textContent = p.title;
     document.getElementById('detailsDifficulty').textContent = p.difficulty;
     document.getElementById('detailsLink').href = p.link;
@@ -53,8 +61,7 @@ function openDetailsPanel(problemId) {
     document.getElementById('detailsTags').innerHTML = p.tags.map(tag => `<span class="tag tag-${tag.toLowerCase().replace(' ', '-')}">${tag}</span>`).join('');
     document.getElementById('detailsTimestamp').textContent = p.timestamp;
     document.getElementById('commentsInput').value = p.comments;
-    document.getElementById('intuitionInput').value = p.intuition;
-    document.getElementById('codeInput').value = p.code;
+    document.getElementById("intuitionInput").innerHTML = formattedIntuition;
 
     ['commentsInput', 'intuitionInput', 'codeInput'].forEach(id => {
         const el = document.getElementById(id);
@@ -158,10 +165,15 @@ function setupEventListeners() {
         handleTextareaInput('comments', e.target.value);
         autoResizeTextarea(e.target);
     });
-    document.getElementById('intuitionInput')?.addEventListener('input', e => {
-        handleTextareaInput('intuition', e.target.value);
-        autoResizeTextarea(e.target);
+   
+    document.getElementById('intuitionInput').addEventListener('input', function (e) {
+    const currentProblem = problems.find(p => p.title === document.getElementById('detailsTitle').textContent);
+    if (currentProblem) {
+        currentProblem.intuition = e.target.innerText; // store plain text only
+        saveProblemsToStorage();
+    }
     });
+
     document.getElementById('codeInput')?.addEventListener('input', e => {
         handleTextareaInput('code', e.target.value);
         autoResizeTextarea(e.target);
@@ -169,7 +181,7 @@ function setupEventListeners() {
 
     document.getElementById('problemsTableBody')?.addEventListener('click', e => {
         const id = Number(e.target.getAttribute('data-id'));
-        if (e.target.classList.contains('open-btn')) {
+        if (e.target.classList.contains('problem-title')) {
             openDetailsPanel(id);
         } else if (e.target.classList.contains('delete-btn')) {
             deleteProblem(id);

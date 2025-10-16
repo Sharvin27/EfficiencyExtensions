@@ -150,7 +150,15 @@ export async function handleNotepadMessage(message, sender, sendResponse) {
     difficulty: difficulty,
     pointers: pointer,
     tags: tags,
-    timestamp: new Date().toLocaleString(),
+    timestamp: new Date().toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+    }),
+
     comments: "",
     intuition: intuitionText,
     code: ""
@@ -168,26 +176,26 @@ export async function handleNotepadMessage(message, sender, sendResponse) {
 
 
 
-async function appendIntuitionBlock(pageId, text) {
-  await fetch(`https://api.notion.com/v1/blocks/${pageId}/children`, {
-    method: "PATCH",
-    headers: {
-      "Authorization": `Bearer ${NOTION_TOKEN}`,
-      "Content-Type": "application/json",
-      "Notion-Version": "2022-06-28"
-    },
-    body: JSON.stringify({
-      children: [
-        {
-          object: 'block',
-          type: 'paragraph',
-          paragraph: {
-            rich_text: [
-              { type: 'text', text: { content: text } }
-            ]
-          }
-        }
-      ]
-    })
-  });
-}
+// async function appendIntuitionBlock(pageId, text) {
+//   await fetch(`https://api.notion.com/v1/blocks/${pageId}/children`, {
+//     method: "PATCH",
+//     headers: {
+//       "Authorization": `Bearer ${NOTION_TOKEN}`,
+//       "Content-Type": "application/json",
+//       "Notion-Version": "2022-06-28"
+//     },
+//     body: JSON.stringify({
+//       children: [
+//         {
+//           object: 'block',
+//           type: 'paragraph',
+//           paragraph: {
+//             rich_text: [
+//               { type: 'text', text: { content: text } }
+//             ]
+//           }
+//         }
+//       ]
+//     })
+//   });
+// }
