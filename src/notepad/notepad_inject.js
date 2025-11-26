@@ -133,6 +133,38 @@
   });
   // --- End persistence logic ---
 
+  // Database Selector Row
+  const dbRow = document.createElement('div');
+  dbRow.style.display = 'flex';
+  dbRow.style.alignItems = 'center';
+  dbRow.style.margin = '10px 0';
+  dbRow.style.color = '#00f5ff';
+  dbRow.style.fontSize = '14px';
+
+  const dbLabel = document.createElement('span');
+  dbLabel.textContent = "Save to: ";
+  dbLabel.style.marginRight = '10px';
+
+  const dbSelect = document.createElement('select');
+  dbSelect.id = 'leet-db-select';
+  dbSelect.style.padding = '8px';
+  dbSelect.style.borderRadius = '6px';
+  dbSelect.style.background = 'rgba(255,255,255,0.05)';
+  dbSelect.style.color = '#fff';
+  dbSelect.style.border = '1px solid #00f5ff55';
+  dbSelect.style.outline = 'none';
+
+  // Add options (you will fill your actual DB names & IDs)
+  dbSelect.innerHTML = `
+    <option value="LEETCODE_DB">LeetCode Tracker</option>
+    <option value="ML_DB">Machine Learning Notes</option>
+  `;
+
+  dbRow.appendChild(dbLabel);
+  dbRow.appendChild(dbSelect);
+  overlay.appendChild(dbRow);
+
+
   // Status checkbox and label
   const statusRow = document.createElement('div');
   statusRow.style.display = 'flex';
@@ -178,13 +210,14 @@
     // const plainText = editor.innerText.trim();
     const htmlContent = editor.innerHTML.trim();
     const blocks = parseNotepadHTML(htmlContent);
+    const selectedDB = dbSelect.value;
     const isSolved = statusCheckbox.checked;
     const finalPointer = pointerInput.value?.trim() || "";  // Always fallback to empty string
 
 
     window.dispatchEvent(new CustomEvent('leet-notepad-send', {
       // detail: { text: plainText, pointer: finalPointer, solved: isSolved }
-      detail: { blocks, pointer: finalPointer, solved: isSolved }
+      detail: { blocks, pointer: finalPointer, solved: isSolved, targetDB: selectedDB }
 
     }));
     // Clear saved content after sending (optional)

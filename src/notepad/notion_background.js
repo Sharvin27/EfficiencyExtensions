@@ -1,239 +1,229 @@
-import { NOTION_TOKEN, DATABASE_ID } from "../secrets.js";
+import { NOTION_TOKEN, DB_MAP, DB_SCHEMA } from "../secrets.js";
 
-export async function handleNotepadMessage(message, sender, sendResponse) {
-  if (message.type !== 'notepad-intuition') return;
+/* ===========================================================
+   🔹 Handle Incoming Notepad Message (FULLY DYNAMIC)
+   =========================================================== */
+export async function handleNotepadMessage(message) {
+  if (message.type !== "notepad-intuition") return;
 
-  const intuitionText = message.intuition.blocks;
-  const isSolved = message.intuition.solved;
+  const blocks = message.intuition.blocks || [];
   const pointer = message.intuition.pointer || "";
+  const isSolved = message.intuition.solved;
+  const targetDB = message.intuition.targetDB;
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab || !tab.id || !tab.url || !tab.title) {
-    console.warn("❌ Could not fetch tab info.");
+  const DATABASE_ID = DB_MAP[targetDB];
+  const SCHEMA = DB_SCHEMA[targetDB];
+
+  if (!DATABASE_ID || !SCHEMA) {
+    console.error("❌ Invalid target DB:", targetDB);
     return;
   }
 
-  const leetcodeUrl = tab.url;
-  const leetcodeTitle = tab.title.replace(" - LeetCode", "").trim();
+  /* -------------------------------------------
+      1. Get Active Tab Info
+     ------------------------------------------- */
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab) return console.error("❌ Cannot read active tab");
 
-  const [{ result }] = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: () => {
-      const diffElem = document.querySelector('div[class*="text-difficulty-"]');
-      const difficulty = diffElem ? diffElem.innerText.trim() : "Unknown";
-      const tagContainer = document.querySelector('div.flex.flex-wrap.gap-1.pl-7');
-      let tags = [];
-      if (tagContainer) {
-        tags = Array.from(tagContainer.querySelectorAll('a')).map(el => el.innerText.trim());
-      }
-      return { difficulty, tags };
-    }
-  });
+  const pageUrl = tab.url;
+  const pageTitle = cleanTitle(tab.title);
 
-  const { difficulty, tags } = result;
-  const notionTags = tags.map(tag => ({ name: tag }));
+  /* -------------------------------------------
+      2. Optional: Extract LeetCode metadata 
+     ------------------------------------------- */
+  let difficulty = null;
+  let tags = [];
 
-  // 1. Search for existing page
-  const searchRes = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${NOTION_TOKEN}`,
-      "Content-Type": "application/json",
-      "Notion-Version": "2022-06-28"
-    },
-    body: JSON.stringify({
-      filter: {
-        property: "Problem Title",
-        title: {
-          equals: leetcodeTitle
+  // ONLY scrape if the database schema contains these properties
+  if (SCHEMA.difficultyProp || SCHEMA.tagsProp) {
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: scrapeLeetCodeMeta
+    });
+    difficulty = result.difficulty;
+    tags = result.tags;
+  }
+
+  /* -------------------------------------------
+      3. Search for existing page by titleProp
+     ------------------------------------------- */
+  const searchRes = await fetch(
+    `https://api.notion.com/v1/databases/${DATABASE_ID}/query`,
+    {
+      method: "POST",
+      headers: notionJSONHeaders,
+      body: JSON.stringify({
+        filter: {
+          property: SCHEMA.titleProp,   // ← dynamic
+          title: { equals: pageTitle }
         }
-      }
-    })
-  });
+      })
+    }
+  );
 
   const searchData = await searchRes.json();
-  const pageId = searchData?.results?.[0]?.id;
+  let finalPageId = searchData?.results?.[0]?.id || null;
 
-  if (pageId) {
-    // Update properties and add intuition
-    await fetch(`https://api.notion.com/v1/pages/${pageId}`, {
+  /* -------------------------------------------
+      4. Build dynamic properties for ANY DB
+     ------------------------------------------- */
+  const baseData = {
+    title: pageTitle,
+    url: pageUrl,
+    isSolved,
+    pointer,
+    difficulty,
+    tags
+  };
+
+  const properties = buildProperties(SCHEMA, baseData);
+
+  /* -------------------------------------------
+      5. Create or Update Page
+     ------------------------------------------- */
+  if (finalPageId) {
+    // Update existing
+    await fetch(`https://api.notion.com/v1/pages/${finalPageId}`, {
       method: "PATCH",
-      headers: {
-        "Authorization": `Bearer ${NOTION_TOKEN}`,
-        "Content-Type": "application/json",
-        "Notion-Version": "2022-06-28"
-      },
-      body: JSON.stringify({
-        properties: {
-          "Status": { "select": { "name": isSolved ? "Solved" : "Unsolved" } },
-          "Pointers": { "rich_text": [{ "text": { "content": pointer } }] },
-          "TimeStamp": { "date": { "start": new Date().toISOString() } }
-        }
-      })
+      headers: notionJSONHeaders,
+      body: JSON.stringify({ properties })
     });
 
-    await appendIntuitionBlock(pageId, intuitionText);
-    console.log("✅ Updated existing Notion page.");
+    console.log("🔁 Updated existing page:", finalPageId);
   } else {
-    // Create new page
-    const pageRes = await fetch("https://api.notion.com/v1/pages", {
+    // Create new
+    const createRes = await fetch("https://api.notion.com/v1/pages", {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${NOTION_TOKEN}`,
-        "Content-Type": "application/json",
-        "Notion-Version": "2022-06-28"
-      },
+      headers: notionJSONHeaders,
       body: JSON.stringify({
         parent: { database_id: DATABASE_ID },
-        properties: {
-          "Problem Title": { "title": [{ "text": { "content": leetcodeTitle } }] },
-          "Link": { "url": leetcodeUrl },
-          "Status": { "select": { "name": isSolved ? "Solved" : "Unsolved" } },
-          "Pointers": { "rich_text": [{ "text": { "content": pointer } }] },
-          "Tags": { "multi_select": notionTags },
-          "Difficulty": { "select": { "name": difficulty } },
-          "TimeStamp": { "date": { "start": new Date().toISOString() } }
-        }
+        properties
       })
     });
 
-    if (!pageRes.ok) {
-      const err = await pageRes.text();
-      console.error("❌ Error creating page:", pageRes.status, err);
-      return;
-    }
+    
+    const created = await createRes.json();
+    console.log("Create page response:", created);   // ⬅️ ADD THIS
 
-    const createdPage = await pageRes.json();
-    await appendIntuitionBlock(createdPage.id, intuitionText);
-    console.log("✅ Created new Notion page.");
+    finalPageId = created.id;
+
+    console.log("🆕 Created new page:", finalPageId);
   }
+
+  /* -------------------------------------------
+      6. Append Text Blocks + Upload Images
+     ------------------------------------------- */
+  await appendBlocks(finalPageId, blocks);
 }
 
-// export async function handleNotepadMessage(message, sender, sendResponse) {
-//   if (message.type !== 'notepad-intuition') return;
-//   console.log("📥 Received intuition message:", message);
+/* ===========================================================
+   🔹 Clean Page Title for non-LeetCode DBs
+   =========================================================== */
+function cleanTitle(title) {
+  return title.replace(" - LeetCode", "").trim();
+}
 
-//   const intuitionText = message.intuition.text;
-//   const isSolved = message.intuition.solved;
-//   const pointer = message.intuition.pointer || "";
+/* ===========================================================
+   🔹 LeetCode Scraper (runs ONLY when needed)
+   =========================================================== */
+function scrapeLeetCodeMeta() {
+  const diffNode = document.querySelector('div[class*="text-difficulty-"]');
+  const tagContainer = document.querySelector("div.flex.flex-wrap.gap-1.pl-7");
 
-//   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-//   if (!tab || !tab.id || !tab.url || !tab.title) {
-//     console.warn("❌ Could not fetch tab info.");
-//     return;
-//   }
+  return {
+    difficulty: diffNode ? diffNode.innerText.trim() : null,
+    tags: tagContainer
+      ? [...tagContainer.querySelectorAll("a")].map(a => a.innerText.trim())
+      : []
+  };
+}
 
-//   const leetcodeUrl = tab.url;
-//   const leetcodeTitle = tab.title.replace(" - LeetCode", "").trim();
+/* ===========================================================
+   🔹 Build Notion Properties Dynamically (FUTURE-PROOF)
+   =========================================================== */
+function buildProperties(schema, data) {
+  const p = {};
 
-//   const [{ result }] = await chrome.scripting.executeScript({
-//     target: { tabId: tab.id },
-//     func: () => {
-//       const diffElem = document.querySelector('div[class*="text-difficulty-"]');
-//       const difficulty = diffElem ? diffElem.innerText.trim() : "Unknown";
-//       const tagContainer = document.querySelector('div.flex.flex-wrap.gap-1.pl-7');
-//       let tags = [];
-//       if (tagContainer) {
-//         tags = Array.from(tagContainer.querySelectorAll('a')).map(el => el.innerText.trim());
-//       }
-//       return { difficulty, tags };
-//     }
-//   });
+  if (schema.titleProp) {
+    p[schema.titleProp] = {
+      title: [{ text: { content: data.title } }]
+    };
+  }
 
-//   const { difficulty, tags } = result;
+  if (schema.linkProp) {
+    p[schema.linkProp] = { url: data.url };
+  }
 
-//   const newProblem = {
-//     id: Date.now(),
-//     title: leetcodeTitle,
-//     link: leetcodeUrl,
-//     status: isSolved ? "Solved" : "To Do",
-//     difficulty: difficulty,
-//     pointers: pointer,
-//     tags: tags,
-//     timestamp: new Date().toLocaleString('en-US', {
-//         year: 'numeric',
-//         month: 'long',
-//         day: 'numeric',
-//         hour: 'numeric',
-//         minute: '2-digit',
-//         hour12: true
-//     }),
+  if (schema.statusProp) {
+    p[schema.statusProp] = {
+      select: {
+        name: data.isSolved
+          ? schema.solvedValues?.solved || "Solved"
+          : schema.solvedValues?.unsolved || "Unsolved"
+      }
+    };
+  }
 
-//     comments: "",
-//     intuition: intuitionText,
-//     code: ""
-//   };
+  if (schema.pointerProp) {
+    p[schema.pointerProp] = {
+      rich_text: [{ text: { content: data.pointer }}]
+    };
+  }
 
-//   // 🔁 Save problem to chrome.storage.local
-//   chrome.storage.local.get(["problems"], (res) => {
-//     const currentProblems = res.problems || [];
-//     currentProblems.unshift(newProblem); // Add new problem to the beginning
-//     chrome.storage.local.set({ problems: currentProblems }, () => {
-//       console.log("✅ Problem stored in chrome.storage.local.");
-//     });
-//   });
-// }
+  if (schema.difficultyProp && data.difficulty) {
+    p[schema.difficultyProp] = {
+      select: { name: data.difficulty }
+    };
+  }
 
+  if (schema.tagsProp && data.tags?.length > 0) {
+    p[schema.tagsProp] = {
+      multi_select: data.tags.map(t => ({ name: t }))
+    };
+  }
 
-// The Actual Function to send Inner Text to Notion- V1
+  if (schema.timestampProp) {
+    p[schema.timestampProp] = {
+      date: { start: new Date().toISOString() }
+    };
+  }
 
-// async function appendIntuitionBlock(pageId, text) {
-//   await fetch(`https://api.notion.com/v1/blocks/${pageId}/children`, {
-//     method: "PATCH",
-//     headers: {
-//       "Authorization": `Bearer ${NOTION_TOKEN}`,
-//       "Content-Type": "application/json",
-//       "Notion-Version": "2022-06-28"
-//     },
-//     body: JSON.stringify({
-//       children: [
-//         {
-//           object: 'block',
-//           type: 'paragraph',
-//           paragraph: {
-//             rich_text: [
-//               { type: 'text', text: { content: text } }
-//             ]
-//           }
-//         }
-//       ]
-//     })
-//   });
-// }
+  return p;
+}
 
-//// Function to send Inner Text to Notion with Image- V2
-async function appendIntuitionBlock(pageId, blocks) {
+/* ===========================================================
+   🔹 Append Text + Images (parallel upload)
+   =========================================================== */
+async function appendBlocks(pageId, blocks) {
   const textBlocks = [];
-  const imageUploads = [];
+  const imgTasks = [];
 
-  for (const block of blocks) {
-    if (block.type === "text") {
+  for (const b of blocks) {
+    if (b.type === "text") {
       textBlocks.push({
         object: "block",
         type: "paragraph",
         paragraph: {
-          rich_text: [{ type: "text", text: { content: block.data }}]
+          rich_text: [{ type: "text", text: { content: b.data }}]
         }
       });
     }
 
-    if (block.type === "image") {
-      // Do NOT await sequentially → upload all images in parallel
-      imageUploads.push(uploadAndAttachImage(pageId, block.data));
+    if (b.type === "image") {
+      imgTasks.push(uploadAndAttachImage(pageId, b.data));
     }
   }
 
-  // Insert all text at once (fast)
   if (textBlocks.length > 0) {
     await notionAppend(pageId, textBlocks);
   }
 
-  // Upload all images in parallel (massive speed-up)
-  if (imageUploads.length > 0) {
-    await Promise.all(imageUploads);
-  }
+  await Promise.all(imgTasks);
 }
 
+/* ===========================================================
+   🔹 Notion helpers
+   =========================================================== */
 async function notionAppend(pageId, children) {
   return fetch(`https://api.notion.com/v1/blocks/${pageId}/children`, {
     method: "PATCH",
@@ -253,20 +243,18 @@ const notionFormHeaders = {
   "Notion-Version": "2022-06-28"
 };
 
-async function createNotionUploadObject() {
+async function createUploadObject() {
   const res = await fetch("https://api.notion.com/v1/file_uploads", {
     method: "POST",
     headers: notionJSONHeaders,
     body: "{}"
   });
-  const data = await res.json();
-  return { uploadId: data.id, uploadUrl: data.upload_url };
+  return res.json();
 }
 
-async function uploadBytesToNotion(uploadUrl, file) {
+async function uploadBytes(uploadUrl, file) {
   const form = new FormData();
   form.append("file", file);
-
   return fetch(uploadUrl, {
     method: "POST",
     headers: notionFormHeaders,
@@ -289,17 +277,23 @@ async function attachUploadedFile(pageId, uploadId) {
 async function uploadAndAttachImage(pageId, base64) {
   const file = base64ToFile(base64);
 
-  const { uploadId, uploadUrl } = await createNotionUploadObject();
-  await uploadBytesToNotion(uploadUrl, file);
+  // Step 1
+  const uploadObj = await createUploadObject();
+  const uploadId = uploadObj.id;
+  const uploadUrl = uploadObj.upload_url;
+
+  // Step 2
+  await uploadBytes(uploadUrl, file);
+
+  // Step 3
   await attachUploadedFile(pageId, uploadId);
 }
 
-function base64ToFile(base64, filename = "image.png") {
-  const [meta, b64] = base64.split(",");
+function base64ToFile(base64, filename = "note.png") {
+  const [meta, data] = base64.split(",");
   const mime = meta.match(/:(.*?);/)[1];
-  const bin = atob(b64);
-  const len = bin.length;
-  const arr = new Uint8Array(len);
-  for (let i = 0; i < len; i++) arr[i] = bin.charCodeAt(i);
+  const bin = atob(data);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   return new File([arr], filename, { type: mime });
 }

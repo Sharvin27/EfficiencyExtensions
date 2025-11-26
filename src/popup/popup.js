@@ -1,4 +1,3 @@
-import { NOTION_TOKEN, DATABASE_ID } from "../secrets.js";
 
 const toggleSwitch = document.getElementById('toggleSwitch');
 
