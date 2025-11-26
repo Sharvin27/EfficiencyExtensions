@@ -197,6 +197,28 @@
   const editor = document.createElement('div');
   editor.id = 'leet-intuition-editor';
   editor.contentEditable = 'true';
+  editor.addEventListener("paste", async (e) => {
+  for (const item of e.clipboardData.items) {
+    if (item.type.startsWith("image/")) {
+      e.preventDefault();
+
+      const file = item.getAsFile();
+      const reader = new FileReader();
+
+      reader.onload = (ev) => {
+        const img = document.createElement("img");
+        img.src = ev.target.result; // base64 permanent image
+        img.style.maxWidth = "100%";
+        editor.appendChild(img);
+      };
+
+      reader.readAsDataURL(file);
+      return;
+    }
+  }
+  });
+
+
   editor.style.width = '100%';
   editor.style.height = 'calc(100vh - 280px)';
   editor.style.borderRadius = '12px';
@@ -212,6 +234,8 @@
   editor.style.boxShadow = 'inset 0 2px 12px rgba(0, 0, 0, 0.3), 0 4px 20px rgba(0, 245, 255, 0.1)';
   editor.style.transition = 'all 0.3s ease';
   editor.style.lineHeight = '1.6';
+  editor.style.whiteSpace = "pre-wrap"; // ❤️ preserves indentation & multiple spaces
+
   
   editor.onfocus = () => {
     editor.style.borderColor = 'rgba(0, 245, 255, 0.5)';
@@ -221,6 +245,21 @@
     editor.style.borderColor = 'rgba(0, 245, 255, 0.3)';
     editor.style.boxShadow = 'inset 0 2px 12px rgba(0, 0, 0, 0.3), 0 4px 20px rgba(0, 245, 255, 0.1)';
   };
+  editor.addEventListener("keydown", e => {
+  // ENTER → insert real newline
+  if (e.key === "Enter") {
+    e.preventDefault();
+    insertTextAtCursor("\n");
+  }
+
+  // TAB → insert 4 spaces
+  if (e.key === "Tab") {
+  e.preventDefault();
+  if (e.shiftKey) insertTextAtCursor("\b\b\b\b"); // remove 4 spaces
+  else insertTextAtCursor("    "); // add 4 spaces
+  }
+});
+
 
   // Custom scrollbar
   const style = document.createElement('style');
@@ -248,9 +287,9 @@
   // --- Notepad persistence logic ---
   const storageKey = 'leet-notepad-' + normalizeLeetCodePath(location.pathname);
   const saved = localStorage.getItem(storageKey);
-  if (saved) editor.innerText = saved;
+  if (saved) editor.innerHTML = saved;
   editor.addEventListener('input', () => {
-    localStorage.setItem(storageKey, editor.innerText);
+    localStorage.setItem(storageKey, editor.innerHTML);
   });
 
   // Database Selector Row with glassmorphism
@@ -419,55 +458,57 @@
 })();
 
 function parseNotepadHTML(html) {
-  const tpl = document.createElement('template');
-  tpl.innerHTML = html;
+  const container = document.createElement("div");
+  container.innerHTML = html;
+
+  let fullText = "";
   const blocks = [];
 
-  function pushText(str) {
-    if (!str) return;
-    const text = str.replace(/\s+/g, ' ').trim();
-    if (!text) return;
-    const last = blocks[blocks.length - 1];
-    if (last && last.type === 'text') {
-      last.data += ' ' + text;
-    } else {
-      blocks.push({ type: 'text', data: text });
-    }
-  }
-
-  function processNode(node) {
+  function walk(node) {
     if (!node) return;
+
+    // IMAGE
+    if (node.nodeType === Node.ELEMENT_NODE && node.tagName === "IMG") {
+      // Before pushing image block, save accumulated text
+      if (fullText.trim().length > 0) {
+        blocks.push({ type: "text", data: fullText });
+        fullText = "";
+      }
+
+      const src = node.src || node.getAttribute("src");
+      if (src) blocks.push({ type: "image", data: src });
+      return;
+    }
+
+    // PRE or code block → preserve everything exactly
+    if (node.nodeType === Node.ELEMENT_NODE && node.tagName === "PRE") {
+      const code = node.innerText.replace(/\u00a0/g, " ");
+      fullText += code + "\n";
+      return;
+    }
+
+    // TEXT NODE → preserve spacing
     if (node.nodeType === Node.TEXT_NODE) {
-      pushText(node.textContent);
-      return;
-    }
-    if (node.nodeType !== Node.ELEMENT_NODE) return;
-
-    const tag = node.tagName.toUpperCase();
-
-    if (tag === 'IMG') {
-      const src = node.src || node.getAttribute('src') || '';
-      if (src) blocks.push({ type: 'image', data: src });
+      fullText += node.textContent.replace(/\u00a0/g, " ");
       return;
     }
 
-    if (tag === 'BR') {
-      pushText('\n');
-      return;
-    }
+    // DESCEND
+    node.childNodes.forEach(walk);
 
-    node.childNodes.forEach(child => processNode(child));
-
-    if (['P', 'DIV', 'LI', 'ARTICLE', 'SECTION', 'H1', 'H2', 'H3', 'H4'].includes(tag)) {
-      pushText('\n');
+    // Block-level → add line break
+    if (["P","DIV","SECTION","ARTICLE","H1","H2","H3","H4"].includes(node.tagName)) {
+      fullText += "\n";
     }
   }
 
-  tpl.content.childNodes.forEach(child => processNode(child));
+  walk(container);
 
-  return blocks
-    .map(b => b.type === 'text' ? { ...b, data: b.data.replace(/\s*\n\s*/g, '\n').trim() } : b)
-    .filter(b => (b.type === 'image' && b.data) || (b.type === 'text' && b.data.length > 0));
+  if (fullText.trim().length > 0) {
+    blocks.push({ type: "text", data: fullText.trimEnd() });
+  }
+
+  return blocks;
 }
 
 function normalizeLeetCodePath(path) {
@@ -476,4 +517,18 @@ function normalizeLeetCodePath(path) {
     return `/problems/${parts[2]}/`;
   }
   return path;
+}
+
+function insertTextAtCursor(text) {
+  const sel = window.getSelection();
+  if (!sel.rangeCount) return;
+
+  const range = sel.getRangeAt(0);
+  range.deleteContents();
+  range.insertNode(document.createTextNode(text));
+
+  // Move cursor to end
+  range.collapse(false);
+  sel.removeAllRanges();
+  sel.addRange(range);
 }
