@@ -121,7 +121,9 @@
 
   // --- Notepad persistence logic ---
   // Key for localStorage (unique per problem page)
-  const storageKey = 'leet-notepad-' + location.pathname;
+
+  const storageKey = 'leet-notepad-' + normalizeLeetCodePath(location.pathname);
+
   // Load saved content
   const saved = localStorage.getItem(storageKey);
   if (saved) editor.innerText = saved;
@@ -173,13 +175,17 @@
   
 
   sendBtn.onclick = () => {
-    const plainText = editor.innerText.trim();
+    // const plainText = editor.innerText.trim();
+    const htmlContent = editor.innerHTML.trim();
+    const blocks = parseNotepadHTML(htmlContent);
     const isSolved = statusCheckbox.checked;
     const finalPointer = pointerInput.value?.trim() || "";  // Always fallback to empty string
 
 
     window.dispatchEvent(new CustomEvent('leet-notepad-send', {
-      detail: { text: plainText, pointer: finalPointer, solved: isSolved }
+      // detail: { text: plainText, pointer: finalPointer, solved: isSolved }
+      detail: { blocks, pointer: finalPointer, solved: isSolved }
+
     }));
     // Clear saved content after sending (optional)
     localStorage.removeItem(storageKey);
@@ -189,3 +195,72 @@
   overlay.appendChild(sendBtn);
   document.body.appendChild(overlay);
 })();
+
+function parseNotepadHTML(html) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  const blocks = [];
+
+  function pushText(str) {
+    if (!str) return;
+    // Collapse whitespace
+    const text = str.replace(/\s+/g, ' ').trim();
+    if (!text) return;
+    const last = blocks[blocks.length - 1];
+    if (last && last.type === 'text') {
+      last.data += ' ' + text;
+    } else {
+      blocks.push({ type: 'text', data: text });
+    }
+  }
+
+  function processNode(node) {
+    if (!node) return;
+    if (node.nodeType === Node.TEXT_NODE) {
+      pushText(node.textContent);
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+    const tag = node.tagName.toUpperCase();
+
+    if (tag === 'IMG') {
+      // Prefer resolved `src` if available, otherwise use attribute
+      const src = node.src || node.getAttribute('src') || '';
+      if (src) blocks.push({ type: 'image', data: src });
+      return;
+    }
+
+    if (tag === 'BR') {
+      pushText('\n');
+      return;
+    }
+
+    // Recurse into children in DOM order
+    node.childNodes.forEach(child => processNode(child));
+
+    // For block-level tags, normalize a paragraph break
+    if (['P', 'DIV', 'LI', 'ARTICLE', 'SECTION', 'H1', 'H2', 'H3', 'H4'].includes(tag)) {
+      pushText('\n');
+    }
+  }
+
+  tpl.content.childNodes.forEach(child => processNode(child));
+
+  // Final cleanup: trim text blocks' leading/trailing whitespace and remove empty entries
+  return blocks
+    .map(b => b.type === 'text' ? { ...b, data: b.data.replace(/\s*\n\s*/g, '\n').trim() } : b)
+    .filter(b => (b.type === 'image' && b.data) || (b.type === 'text' && b.data.length > 0));
+}
+
+
+function normalizeLeetCodePath(path) {
+  const parts = path.split('/');
+
+  // We keep: ["", "problems", "<slug>", ""]
+  if (parts[1] === "problems" && parts[2]) {
+    return `/problems/${parts[2]}/`;
+  }
+
+  return path; // fallback
+}
