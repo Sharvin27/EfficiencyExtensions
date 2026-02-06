@@ -1,20 +1,19 @@
 import { callGemini } from './ai.js';
 
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+export function handleTabUpdate(tabId, changeInfo, tab) {
   if (changeInfo.status === 'complete' && tab.url) {
-    // Wait for full load
     setTimeout(() => {
       chrome.tabs.get(tabId, (updatedTab) => {
         if (
-          chrome.runtime.lastError ||  // handles rare cases like closed tabs
+          chrome.runtime.lastError ||
           !updatedTab.url ||
           !updatedTab.url.startsWith('http')
         ) {
           return;
         }
-        // 🔄 Check if the extension is enabled from popup toggle
+
         chrome.storage.sync.get('extensionEnabled', (data) => {
-          const isEnabled = data.extensionEnabled ?? false; // default to disabled
+          const isEnabled = data.extensionEnabled ?? false;
           if (!isEnabled) {
             console.log("🚫 Extension is disabled. Skipping Gemini call.");
             return;
@@ -39,12 +38,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             console.error("Unexpected Error:", error);
           }
         });
-
       });
-    }, 5000); // Delay to allow page content to settle
+    }, 5000);
   }
-});
-
-
-
-
+}
