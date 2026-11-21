@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hand-detection"
+version = "0.1.0"
+description = "Reusable, optimised hand landmark detection for video streams (MediaPipe Tasks HandLandmarker)"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "mediapipe>=0.10.9",
+    "opencv-python>=4.5",
+    "numpy>=1.21",
+]
+
+[tool.setuptools]
+packages = ["hand_detection"]

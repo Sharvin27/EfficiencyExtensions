@@ -1,0 +1,20 @@
+# model files (downloaded to the user cache dir by default; never commit them)
+*.task
+models/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# virtual environments
+.venv/
+venv/
+env/
+
+# example outputs
+*_hands.mp4
+*_hands.json
+out/
